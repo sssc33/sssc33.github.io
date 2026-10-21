@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="l4DK9DH328FhJUmDFEy2EQ"><head data-page-node-id="ksC5WZOytrtZkD6XkxZ2Q5">
+  <meta charset="UTF-8" data-page-node-id="R6UjFswyuCKPIUGKCn0G0W">
+  <!-- 响应式视口设置：使页面在移动端正确缩放 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="5w4kYYu7XwfRgQ5mk9bhmt">
+  <meta name="description" content="个人主页 — 可离线运行的响应式个人网站" data-page-node-id="AwMBhEaU29X2xQHQEe2UGE">
+  <title data-page-node-id="NGoYjUQWQB61LFJxRX4FXn">我的个人主页</title>
+
+  <!-- 引入外部样式表（离线相对路径） -->
+  <link rel="stylesheet" href="css/style.css" data-page-node-id="kmyGytmqXNxtMtaHHpz0HC">
+<style id="__dm_no_drag_style__">* { -webkit-user-drag: none !important; }</style><style id="__dm_bindable_badge_style__">[data-sp-bindable="database"]{outline:1px dashed #0088ff;outline-offset:2px;border-radius:4px;}[data-sp-bindable="database"] *{pointer-events:none !important;transition:none !important;animation:none !important;}[data-sp-bindable="database"]{transition:none !important;animation:none !important;}</style></head>
+
+<body data-page-node-id="TyNhEiGXhBGIFlLWTTdKmc" style="">
+  <!-- ============================================================
+       导航栏（全站统一）
+       说明：使用 <header> + <nav> 语义化标签。
+       移动端通过汉堡按钮切换菜单（JS 控制显示/隐藏）。
+  ============================================================ -->
+  <header class="navbar" id="navbar" data-page-node-id="BHHCJU3oSnG4E54OydbQKw">
+    <div class="nav-container" data-page-node-id="nQCWAkgPcCkCMBsjRvpklH">
+      <!-- 站点 LOGO / 名称：点击回到顶部 -->
+      <a href="#home" class="nav-logo" data-page-node-id="RgIM2BOpagBEopwqAHzQxW" style="color: rgb(0, 0, 0);">我的主页</a>
+
+      <!-- 移动端汉堡菜单按钮（仅小屏幕显示） -->
+      <button class="nav-toggle" id="navToggle" aria-label="切换导航菜单" aria-expanded="false" data-page-node-id="3yuiZn50YFfMCESLJ094HH">
+        <span class="nav-toggle-bar" data-page-node-id="PQG61j6oGjS1tT9IkWAPCa" style="background-color: rgb(0, 0, 0);"></span>
+        <span class="nav-toggle-bar" data-page-node-id="cj7EH4YLTww3O2IiVq2IDW"></span>
+        <span class="nav-toggle-bar" data-page-node-id="2nrZtggEjyH78MfFi5Ejss"></span>
+      </button>
+
+      <!-- 导航链接列表 -->
+      <nav class="nav-menu" id="navMenu" data-page-node-id="59fvp6XdiLyxDcQNFRrNqP">
+        <a href="#home" class="nav-link" data-page-node-id="jS4hXQmnqSHZSGAEFQ2Qnw">首页</a>
+        <a href="#about" class="nav-link active" data-page-node-id="ZOH4ctIxG1aI5FfrcMEheu">关于我</a>
+        <a href="#projects" class="nav-link" data-page-node-id="tCxdAXsbJ11CRdUhDeN8zB">项目展示</a>
+        <a href="timeline.html" class="nav-link" data-page-node-id="timeline-link">3D 时间线</a>
+        <a href="#contact" class="nav-link" data-page-node-id="EBjScCctp0mn3rqEMXv9l0">联系方式</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       主内容区域
+  ============================================================ -->
+  <main data-page-node-id="wFAnCOSAfmFGlhOWxsnRRl">
+    <!-- ----------------------------------------------------------
+         首页（Hero 区块）
+         说明：大标题 + 简短介绍 + 行动按钮。
+    ---------------------------------------------------------- -->
+    <section id="home" class="section section-hero" data-page-node-id="Wt3rSXeqwh1q7CaxbyaL1G">
+      <div class="hero-content" data-page-node-id="ATGHABOsGjTRXVXmu3J43k">
+        <h1 class="hero-title" data-page-node-id="ofQXvQ0tW6gKFYy55jvqfT">你好，我是<span class="highlight" data-page-node-id="C94YxafvPAdMQAYrpoJAvf" style="color: rgb(0, 0, 0);">陈珊</span></h1>
+        <p class="hero-subtitle" data-page-node-id="ryVnES6QqDDr6f1LWOTzp3">一个热爱创造与分享的开发者</p>
+        <a href="#projects" class="btn btn-primary" data-page-node-id="SPhcL2p6vYswgPNjEKFVGq">查看我的作品</a>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------------
+         关于我
+         说明：个人简介 + 技能标签列表。
+    ---------------------------------------------------------- -->
+    <section id="about" class="section" data-page-node-id="0QFKEIvGSVfhqPjUfw3y71">
+      <div class="container" data-page-node-id="Al0V2jcRAzeuMTLggewXZD">
+        <h2 class="section-title" data-page-node-id="w8n1fahFRXGJtegjJmRn5H">关于我</h2>
+        <div class="about-grid" data-page-node-id="WwLNLMSxDCvhpVay66pHJz">
+          <!-- 左侧：个人介绍文字 -->
+          <div class="about-text" data-page-node-id="uIzDyrSCyKiojbdHE18x0a">
+            <p data-page-node-id="czy2nUWhKXPijgL2F7QhaB">
+              欢迎来到我的个人主页！我是一名热衷于技术与设计的创作者，
+              喜欢用代码把想法变成现实。这里展示了我的一些项目与联系方式。
+            </p>
+            <p data-page-node-id="yT2PpLXX14hZvAAX92cTGb">
+              你可以自由替换这段文字，介绍你自己的背景、经历和兴趣。
+              代码已做好结构分离与注释，方便后续修改。
+            </p>
+          </div>
+          <!-- 右侧：技能标签 -->
+          <div class="about-skills" data-page-node-id="o1x091O8udfuxWvSNc4fhj">
+            <h3 data-page-node-id="EmnphEoThl8PdoGbTIvoAI">技能标签</h3>
+            <ul class="skill-tags" data-page-node-id="p4MunouKsNfQUALdjZwfEO">
+              <li data-page-node-id="JrxaeRVFV9HOTyoTfxb4qU">HTML5</li>
+              <li data-page-node-id="cuHLziWFdFEFCZW5IMYk7c">CSS3</li>
+              <li data-page-node-id="12dP6l8bfsDL1F9EeZGbTR">JavaScript</li>
+              <li data-page-node-id="U2ZBdAJvUVWLA68NX6ZEDs">响应式设计</li>
+              <li data-page-node-id="ytaTvn9L66dl7rPUJHVJZd">UI / UX</li>
+              <li data-page-node-id="Lqwb1JQ5XobZ9YFJARjDip">可离线运行</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------------
+         项目展示
+         说明：卡片式布局展示项目，每张卡片含标题、描述、链接。
+         扩展：复制 .project-card 节点即可增加新项目。
+    ---------------------------------------------------------- -->
+    <section id="projects" class="section section-alt" data-page-node-id="RraFUY9oLASZlBtmUANlf7">
+      <div class="container" data-page-node-id="bEZII3nR70tXGHkKVCr9Hq">
+        <h2 class="section-title" data-page-node-id="gxn9jOqf3nsiITVAYd9qNi">项目展示</h2>
+        <div class="project-grid" data-page-node-id="HJGFoZJNuc2wwfSZgk2GYP">
+          <!-- 项目卡片 1 -->
+          <article class="project-card" data-page-node-id="jH00Y19I4vSQlxgafgP2Vj">
+            <div class="project-icon" data-page-node-id="BBlhKfYdB1vBvDyF2h0oqH">📱</div>
+            <h3 class="project-name" data-page-node-id="ohxHYq0flEoKHO7RSfp2te">项目一</h3>
+            <p class="project-desc" data-page-node-id="PWpzIANI08amAezJsaPFkU">这是一个示例项目描述，简要说明项目的功能和亮点。</p>
+            <a href="#" class="btn btn-outline" data-page-node-id="Qm8iwrEIsHUZH5dZOxzseI">了解更多</a>
+          </article>
+          <!-- 项目卡片 2 -->
+          <article class="project-card" data-page-node-id="M5wQLjljLcSjPX2XBS6sW3">
+            <div class="project-icon" data-page-node-id="TrGyxDlBeV16NmMZAq1J3l">🎨</div>
+            <h3 class="project-name" data-page-node-id="ecUiA6MMPxrfZ87kY14it4">项目二</h3>
+            <p class="project-desc" data-page-node-id="PxV3Vj2cjm86ZjvyJpBsic">这是另一个示例项目描述，替换文字即可自定义内容。</p>
+            <a href="#" class="btn btn-outline" data-page-node-id="UbSI21SUoG7YTgqCEM2Ea5">了解更多</a>
+          </article>
+          <!-- 项目卡片 3 -->
+          <article class="project-card" data-page-node-id="yZSBfG7ZBjwmB491ZDzjcB">
+            <div class="project-icon" data-page-node-id="hIielDHBhpmEzQo3Ohkj0K">⚡</div>
+            <h3 class="project-name" data-page-node-id="yZeNFcCbLVIUjGeNe4XVsP">项目三</h3>
+            <p class="project-desc" data-page-node-id="nz8Z5AsXaiGbz4BksKu609">第三个示例项目，展示卡片网格的扩展能力。</p>
+            <a href="#" class="btn btn-outline" data-page-node-id="oCHyKGeeDK66JJnkmOMsoh">了解更多</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------------
+         联系方式
+         说明：列出邮箱、GitHub 等联系方式。
+         提示：离线场景下 <a href="mailto:..."> 仍可调起邮件客户端。
+    ---------------------------------------------------------- -->
+    <section id="contact" class="section" data-page-node-id="lofuOBYmqHBP3Gx1C1Ey80">
+      <div class="container contact-wrap" data-page-node-id="j7U8Q888lzM3i9m8p6ZOBZ">
+        <h2 class="section-title" data-page-node-id="RiXnwh5NPoaAZ7e6vU7rJC">联系方式</h2>
+        <p class="contact-intro" data-page-node-id="hbVF4Ps5hR3y4VM3GbNhoN">想和我交流？通过以下方式找到我：</p>
+        <ul class="contact-list" data-page-node-id="9nIGObPAQOQtLliFnJ5jj3">
+          <li data-page-node-id="rDAa2FoXJELcm4vIXoHGyI">
+            <span class="contact-label" data-page-node-id="31tAR72iodK5wdVChAKbJd">邮箱</span>
+            <a href="mailto:your.email@example.com" data-page-node-id="aztkGfLgHgPDDmH6iKMtR6">your.email@example.com</a>
+          </li>
+          <li data-page-node-id="rJaDCBNQg1TXw9aMs7xNhx">
+            <span class="contact-label" data-page-node-id="Rs9LaAVrSSjwQkAAYcxGxg">GitHub</span>
+            <a href="#" data-page-node-id="vbXEEMgAKVgc6XclO3Bysp">github.com/yourname</a>
+          </li>
+          <li data-page-node-id="EtmHQHgoGUE73uXkAqx6xD">
+            <span class="contact-label" data-page-node-id="Zr1IxhT8gOiaDaXATGZ4ds">微信</span>
+            <span data-page-node-id="J60oWd4V3H7phyImDzsyE7">your_wechat_id</span>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================================================
+       页脚
+  ============================================================ -->
+  <footer class="footer" data-page-node-id="UzlibCVSuhmvCDPGxuzo9B">
+    <p data-page-node-id="jNwAXE8eqEQWf3VK7ORQgP">© <span id="year" data-page-node-id="Jv7bSjiCBEsiYzPZQpEt8H">2026</span> 我的主页 · 可离线运行 · 响应式设计</p>
+  </footer>
+
+  <!-- 引入外部 JS（defer 保证 DOM 解析完毕后执行） -->
+  <script src="js/main.js" defer="" data-page-node-id="EX7UvTm6uFOcCNhXOS4i3y"></script>
+
+
+</body></html>
