@@ -1,0 +1,454 @@
+/* ============================================================
+   style.css — 个人主页样式表
+   ============================================================
+   文件结构（从上到下）：
+     1.  CSS 变量（主题色、间距、字号等统一定义，方便全局修改）
+     2.  全局重置（盒模型、字体、基础样式）
+     3.  通用工具类（容器、按钮、区块标题等）
+     4.  导航栏样式（含移动端汉堡菜单）
+     5.  Hero 首页区块
+     6.  关于我区块
+     7.  项目展示区块
+     8.  联系方式区块
+     9.  页脚
+    10. 响应式断点（平板 & 手机）
+
+   修改提示：
+     - 想换配色：修改第 1 部分的 CSS 变量即可，全站自动生效。
+     - 想调间距 / 字号：修改变量 --space-*, --font-* 即可。
+     - 想加新区块样式：在对应编号下面新增即可。
+============================================================ */
+
+/* ============================================================
+   1. CSS 变量 — 统一主题配置
+============================================================ */
+:root {
+  /* 主色调（修改这两行即可换肤） */
+  --color-primary:    #4f6df5;   /* 主品牌色 */
+  --color-primary-dark: #3a54d4; /* 深色态：悬停 / 按压 */
+  --color-accent:     #ff6b6b;   /* 强调色：高亮文字 */
+
+  /* 中性色 */
+  --color-bg:         #ffffff;   /* 页面背景 */
+  --color-bg-alt:     #f5f6fa;   /* 交替区块背景 */
+  --color-text:       #1a1a2e;   /* 正文文字 */
+  --color-text-light: #6b6b7b;   /* 次要文字 */
+  --color-border:     #e2e3ea;   /* 边框 / 分割线 */
+
+  /* 间距系统（8px 基准） */
+  --space-xs:  0.5rem;  /* 8px */
+  --space-sm:  1rem;    /* 16px */
+  --space-md:  2rem;    /* 32px */
+  --space-lg:  3rem;    /* 48px */
+  --space-xl:  5rem;    /* 80px */
+
+  /* 字号 */
+  --font-sm:   0.875rem;
+  --font-base: 1rem;
+  --font-lg:   1.25rem;
+  --font-xl:   2rem;
+  --font-2xl:  3rem;
+
+  /* 圆角 */
+  --radius:    8px;
+  --radius-lg: 16px;
+
+  /* 导航栏高度 */
+  --nav-height: 64px;
+}
+
+/* ============================================================
+   2. 全局重置
+============================================================ */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box; /* 统一盒模型：宽度包含 padding 和 border */
+}
+
+html {
+  scroll-behavior: smooth;       /* 点击导航链接平滑滚动到锚点 */
+  scroll-padding-top: var(--nav-height); /* 滚动定位时留出导航栏高度，避免遮挡 */
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: var(--font-base);
+  line-height: 1.6;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+}
+
+ul {
+  list-style: none;
+}
+
+/* ============================================================
+   3. 通用工具类
+============================================================ */
+
+/* 内容容器：限制最大宽度并居中 */
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 var(--space-sm);
+}
+
+/* 区块通用样式 */
+.section {
+  padding: var(--space-xl) 0;
+}
+
+/* 交替背景色区块（视觉区分） */
+.section-alt {
+  background-color: var(--color-bg-alt);
+}
+
+/* 区块标题 */
+.section-title {
+  font-size: var(--font-xl);
+  text-align: center;
+  margin-bottom: var(--space-md);
+}
+
+/* 按钮：基础样式 */
+.btn {
+  display: inline-block;
+  padding: 0.6rem 1.5rem;
+  border-radius: var(--radius);
+  font-size: var(--font-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+/* 主按钮：实心 */
+.btn-primary {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-dark);
+  color: #ffffff;
+}
+
+/* 线框按钮 */
+.btn-outline {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background-color: transparent;
+}
+
+.btn-outline:hover {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+/* ============================================================
+   4. 导航栏
+============================================================ */
+.navbar {
+  position: fixed;          /* 固定在页面顶部 */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--nav-height);
+  background-color: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  z-index: 1000;            /* 确保在其他内容之上 */
+}
+
+.nav-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 var(--space-sm);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 站点 LOGO / 名称 */
+.nav-logo {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+/* 导航链接列表 */
+.nav-menu {
+  display: flex;           /* 桌面端：水平排列 */
+  gap: var(--space-sm);
+}
+
+.nav-link {
+  color: var(--color-text);
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  transition: background-color 0.2s ease;
+}
+
+.nav-link:hover {
+  background-color: var(--color-bg-alt);
+  color: var(--color-primary);
+}
+
+/* 当前激活的导航项（JS 动态切换） */
+.nav-link.active {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+/* 汉堡菜单按钮：桌面端隐藏，移动端由媒体查询显示 */
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.nav-toggle-bar {
+  display: block;
+  width: 24px;
+  height: 3px;
+  background-color: var(--color-text);
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+/* ============================================================
+   5. Hero 首页区块
+============================================================ */
+.section-hero {
+  min-height: 100vh;                    /* 首屏占满视口高度 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: linear-gradient(135deg, var(--color-primary) 0%, #6a89f9 100%);
+  color: #ffffff;
+}
+
+.hero-title {
+  font-size: var(--font-2xl);
+  margin-bottom: var(--space-sm);
+}
+
+/* 高亮文字 */
+.highlight {
+  color: var(--color-accent);
+}
+
+.hero-subtitle {
+  font-size: var(--font-lg);
+  margin-bottom: var(--space-md);
+  opacity: 0.9;
+}
+
+/* Hero 区按钮覆盖：使用白色边框风格 */
+.section-hero .btn-primary {
+  background-color: #ffffff;
+  color: var(--color-primary);
+}
+
+.section-hero .btn-primary:hover {
+  background-color: var(--color-bg-alt);
+}
+
+/* ============================================================
+   6. 关于我区块
+============================================================ */
+.about-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 两列等宽 */
+  gap: var(--space-md);
+}
+
+.about-text p {
+  margin-bottom: var(--space-sm);
+  color: var(--color-text-light);
+}
+
+.about-skills h3 {
+  margin-bottom: var(--space-sm);
+}
+
+/* 技能标签：药丸形 */
+.skill-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.skill-tags li {
+  background-color: var(--color-bg-alt);
+  color: var(--color-primary);
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  font-size: var(--font-sm);
+  font-weight: 500;
+}
+
+/* ============================================================
+   7. 项目展示区块
+============================================================ */
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* 桌面端三列 */
+  gap: var(--space-md);
+}
+
+.project-card {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 悬停时轻微上浮 + 阴影 */
+.project-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.project-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-sm);
+}
+
+.project-name {
+  margin-bottom: var(--space-xs);
+}
+
+.project-desc {
+  color: var(--color-text-light);
+  font-size: var(--font-sm);
+  margin-bottom: var(--space-sm);
+}
+
+/* ============================================================
+   8. 联系方式区块
+============================================================ */
+.contact-wrap {
+  text-align: center;
+}
+
+.contact-intro {
+  color: var(--color-text-light);
+  margin-bottom: var(--space-md);
+}
+
+.contact-list {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  text-align: left;
+}
+
+.contact-list li {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: baseline;
+}
+
+.contact-label {
+  font-weight: 700;
+  min-width: 60px;
+  color: var(--color-text);
+}
+
+/* ============================================================
+   9. 页脚
+============================================================ */
+.footer {
+  background-color: var(--color-text);
+  color: #ffffff;
+  text-align: center;
+  padding: var(--space-md) 0;
+  font-size: var(--font-sm);
+}
+
+/* ============================================================
+   10. 响应式断点
+============================================================ */
+
+/* --- 平板（≤768px）--- */
+@media (max-width: 768px) {
+  /* 项目网格：三列 → 两列 */
+  .project-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* 关于我：两列 → 单列 */
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Hero 标题缩小 */
+  .hero-title {
+    font-size: var(--font-xl);
+  }
+}
+
+/* --- 手机（≤600px）--- */
+@media (max-width: 600px) {
+  /*
+    移动端导航：汉堡菜单切换
+    说明：默认隐藏导航链接，点击汉堡按钮后展开。
+  */
+
+  /* 显示汉堡按钮 */
+  .nav-toggle {
+    display: flex;
+  }
+
+  /* 导航菜单：默认隐藏，改为纵向下拉 */
+  .nav-menu {
+    display: none;
+    position: absolute;
+    top: var(--nav-height);
+    left: 0;
+    width: 100%;
+    background-color: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    flex-direction: column;
+    padding: var(--space-sm);
+    gap: var(--space-xs);
+  }
+
+  /* JS 添加 .open 类后展开菜单 */
+  .nav-menu.open {
+    display: flex;
+  }
+
+  /* 项目网格：两列 → 单列 */
+  .project-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* 减小区块内边距，节省空间 */
+  .section {
+    padding: var(--space-lg) 0;
+  }
+}

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<!--
+  timeline.html — 人类文明 3D 时间线
+  =====================================
+  功能说明：
+    - 基于 Three.js 的交互式 3D 场景，展现从史前到现代的人类发展历程。
+    - 五个时代：史前 → 古代 → 中世纪 → 工业革命 → 现代
+    - 支持滚动、拖拽、时间轴按钮三种切换方式。
+    - 平滑相机动画过渡，鼠标交互（旋转/缩放/平移）。
+    - 响应式设计，桌面和移动端均支持。
+  技术栈：
+    - Three.js（本地离线）
+    - 原生 JavaScript（无框架依赖）
+    - CSS 变量系统（与主站风格一致）
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="人类文明 3D 时间线 — 从史前到现代的交互式旅程" />
+  <title>人类文明 3D 时间线</title>
+
+  <!-- 主站样式 + 时间线专用样式 -->
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/timeline.css" />
+</head>
+
+<body class="timeline-page">
+  <!-- ============================================================
+       导航栏（与主站统一）
+  ============================================================ -->
+  <header class="navbar" id="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">我的主页</a>
+      <button class="nav-toggle" id="navToggle" aria-label="切换导航菜单" aria-expanded="false">
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+      </button>
+      <nav class="nav-menu" id="navMenu">
+        <a href="index.html" class="nav-link">首页</a>
+        <a href="index.html#about" class="nav-link">关于我</a>
+        <a href="index.html#projects" class="nav-link">项目展示</a>
+        <a href="timeline.html" class="nav-link active">3D 时间线</a>
+        <a href="index.html#contact" class="nav-link">联系方式</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       3D 画布容器
+  ============================================================ -->
+  <div id="canvas-container" class="canvas-container">
+    <!-- 加载提示 -->
+    <div id="loading" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">正在构建 3D 世界...</p>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       时代信息面板（左上角）
+  ============================================================ -->
+  <div class="era-info" id="eraInfo">
+    <div class="era-badge" id="eraBadge">01</div>
+    <div class="era-text">
+      <h2 class="era-title" id="eraTitle">史前时代</h2>
+      <p class="era-desc" id="eraDesc">人类文明的黎明，洞穴壁画与石器工具标志着智慧的开端。</p>
+      <span class="era-year" id="eraYear">约公元前 300 万年</span>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       时间轴控制条（底部）
+  ============================================================ -->
+  <div class="timeline-bar" id="timelineBar">
+    <div class="timeline-track">
+      <!-- 进度条 -->
+      <div class="timeline-progress" id="timelineProgress"></div>
+      <!-- 时代节点 -->
+      <button class="timeline-node active" data-era="0" aria-label="史前时代">
+        <span class="node-dot"></span>
+        <span class="node-label">史前</span>
+      </button>
+      <button class="timeline-node" data-era="1" aria-label="古代文明">
+        <span class="node-dot"></span>
+        <span class="node-label">古代</span>
+      </button>
+      <button class="timeline-node" data-era="2" aria-label="中世纪">
+        <span class="node-dot"></span>
+        <span class="node-label">中世纪</span>
+      </button>
+      <button class="timeline-node" data-era="3" aria-label="工业革命">
+        <span class="node-dot"></span>
+        <span class="node-label">工业</span>
+      </button>
+      <button class="timeline-node" data-era="4" aria-label="现代">
+        <span class="node-dot"></span>
+        <span class="node-label">现代</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       操作提示（右下角，首次显示后淡出）
+  ============================================================ -->
+  <div class="controls-hint" id="controlsHint">
+    <div class="hint-item">
+      <span class="hint-icon">🖱️</span>
+      <span>拖拽旋转视角</span>
+    </div>
+    <div class="hint-item">
+      <span class="hint-icon">📜</span>
+      <span>滚轮缩放场景</span>
+    </div>
+    <div class="hint-item">
+      <span class="hint-icon">👆</span>
+      <span>点击时间轴切换时代</span>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       移动端滑动提示
+  ============================================================ -->
+  <div class="swipe-hint" id="swipeHint">
+    <span>👆 左右滑动切换时代</span>
+  </div>
+
+  <!-- Three.js 库（本地离线） -->
+  <script src="js/vendor/three.min.js"></script>
+  <!-- 时间线场景逻辑 -->
+  <script src="js/timeline.js" defer></script>
+</body>
+</html>
