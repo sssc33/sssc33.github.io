@@ -1,1218 +1,329 @@
-/* ============================================================
-   timeline.js — 人类文明 3D 时间线场景逻辑
-   ============================================================
-   功能模块：
-     0.  工具函数
-     1.  场景初始化（Scene, Camera, Renderer）
-     2.  轨道控制器（简化版 OrbitControls）
-     3.  五个时代的 3D 场景构建
-     4.  环境光效系统
-     5.  相机动画与场景过渡
-     6.  时间轴 UI 交互
-     7.  滚动 / 拖拽 / 滑动导航
-     8.  动画循环
-     9.  窗口resize处理
-     10. 入口初始化
-
-   时代数据：
-     0: 史前时代 — 洞穴、篝火、石器
-     1: 古代文明 — 金字塔、方尖碑、神殿
-     2: 中世纪 — 城堡、塔楼、吊桥
-     3: 工业革命 — 蒸汽机、齿轮、烟囱
-     4: 现代 — 摩天大楼、网格城市、发光建筑
-============================================================ */
-
-(function () {
+/* Consumption Only / reference-led reconstruction. Three.js r160, entirely local.
+ * Virtual units are relative proportions, not measured real-world dimensions.
+ * True meshes, procedural UV maps, batched ornaments, demand-driven rendering.
+ */
+(() => {
   'use strict';
-
-  /* ========================================================
-     0. 工具函数
-  ======================================================== */
-  const $  = (s) => document.querySelector(s);
-  const $$ = (s) => document.querySelectorAll(s);
-
-  // 线性插值
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
-  // 三维向量插值
-  function lerpVec3(v1, v2, t) {
-    return new THREE.Vector3(
-      lerp(v1.x, v2.x, t),
-      lerp(v1.y, v2.y, t),
-      lerp(v1.z, v2.z, t)
-    );
+  const host = document.getElementById('canvas-container');
+  const loading = document.getElementById('loading');
+  const $ = id => document.getElementById(id);
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => $(b.dataset.close).close()));
+  $('referenceButton').onclick = () => $('referenceDialog').showModal();
+  $('analysisButton').onclick = () => $('analysisDialog').showModal();
+  document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => {
+    const r = d.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close();
+  }));
+  function fallback(e) {
+    loading.hidden = true;
+    host.innerHTML = '<div class="error-text">此浏览器暂时无法初始化三维显示。请开启硬件加速，或换用支持 WebGL 的浏览器。<br><a href="assets/consumption/reference.svg">查看原作照片</a></div>';
+    console.error('3D scene:', e);
   }
-
-  // 缓动函数：easeInOutCubic
-  function easeInOutCubic(t) {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  }
-
-  /* ========================================================
-     时代数据配置
-  ======================================================== */
-  const ERAS = [
-    {
-      id: 0,
-      title: '史前时代',
-      desc: '人类文明的黎明，洞穴壁画与石器工具标志着智慧的开端。',
-      year: '约公元前 300 万年',
-      cameraPos: new THREE.Vector3(12, 8, 12),
-      cameraTarget: new THREE.Vector3(0, 1, 0),
-      bgColor: 0x1a1510,
-      fogColor: 0x1a1510,
-      ambientIntensity: 0.3,
-      lightColor: 0xffaa44
-    },
-    {
-      id: 1,
-      title: '古代文明',
-      desc: '金字塔与神殿拔地而起，文字与数学开启了文明的新篇章。',
-      year: '约公元前 3000 年',
-      cameraPos: new THREE.Vector3(18, 10, 18),
-      cameraTarget: new THREE.Vector3(0, 3, 0),
-      bgColor: 0x1e2a3a,
-      fogColor: 0x1e2a3a,
-      ambientIntensity: 0.4,
-      lightColor: 0xffdd88
-    },
-    {
-      id: 2,
-      title: '中世纪',
-      desc: '城堡与骑士的时代，石砌建筑见证了封建社会的辉煌与纷争。',
-      year: '公元 5 — 15 世纪',
-      cameraPos: new THREE.Vector3(14, 9, 14),
-      cameraTarget: new THREE.Vector3(0, 2.5, 0),
-      bgColor: 0x1a1e2e,
-      fogColor: 0x1a1e2e,
-      ambientIntensity: 0.35,
-      lightColor: 0xaaccff
-    },
-    {
-      id: 3,
-      title: '工业革命',
-      desc: '蒸汽与齿轮驱动世界，机器轰鸣中人类迈入工业化时代。',
-      year: '18 — 19 世纪',
-      cameraPos: new THREE.Vector3(16, 8, 16),
-      cameraTarget: new THREE.Vector3(0, 2, 0),
-      bgColor: 0x1a1a1a,
-      fogColor: 0x1a1a1a,
-      ambientIntensity: 0.25,
-      lightColor: 0xff8844
-    },
-    {
-      id: 4,
-      title: '现代',
-      desc: '摩天大楼直插云霄，数字与网络连接着世界的每一个角落。',
-      year: '20 世纪 — 至今',
-      cameraPos: new THREE.Vector3(20, 12, 20),
-      cameraTarget: new THREE.Vector3(0, 4, 0),
-      bgColor: 0x0d1117,
-      fogColor: 0x0d1117,
-      ambientIntensity: 0.3,
-      lightColor: 0x66aaff
-    }
-  ];
-
-  /* ========================================================
-     1. 场景初始化
-  ======================================================== */
-  let scene, camera, renderer;
-  let currentEra = 0;
-  let isTransitioning = false;
-  let eraGroups = []; // 每个时代的 3D 对象组
-
-  function initScene() {
-    const container = $('#canvas-container');
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-
-    // 场景
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(ERAS[0].bgColor);
-    scene.fog = new THREE.Fog(ERAS[0].fogColor, 20, 80);
-
-    // 相机
-    camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 200);
-    camera.position.copy(ERAS[0].cameraPos);
-    camera.lookAt(ERAS[0].cameraTarget);
-
-    // 渲染器
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
-    container.appendChild(renderer.domElement);
-  }
-
-  /* ========================================================
-     2. 简化版轨道控制器
-     --------------------------------------------------------
-     支持：左键旋转、右键平移、滚轮缩放、触摸单指旋转、双指缩放
-  ======================================================== */
-  let orbitControls = {
-    enabled: true,
-    minDistance: 5,
-    maxDistance: 50,
-    rotateSpeed: 0.005,
-    zoomSpeed: 0.1,
-    panSpeed: 0.01,
-
-    // 内部状态
-    spherical: new THREE.Spherical(),
-    sphericalDelta: new THREE.Spherical(),
-    panOffset: new THREE.Vector3(),
-    target: new THREE.Vector3(),
-    isRotating: false,
-    isPanning: false,
-    lastPointer: { x: 0, y: 0 },
-    pointers: [],
-    lastDist: 0
-  };
-
-  function initOrbitControls() {
-    const canvas = renderer.domElement;
-    const ctrl = orbitControls;
-    ctrl.target.copy(ERAS[0].cameraTarget);
-
-    // 更新相机位置（从球坐标）
-    function updateCamera() {
-      const offset = new THREE.Vector3();
-      offset.setFromSpherical(ctrl.spherical);
-      camera.position.copy(ctrl.target).add(offset);
-      camera.lookAt(ctrl.target);
-    }
-
-    // 初始化球坐标
-    function initSpherical() {
-      const offset = new THREE.Vector3().subVectors(camera.position, ctrl.target);
-      ctrl.spherical.setFromVector3(offset);
-    }
-    initSpherical();
-
-    // 鼠标按下
-    canvas.addEventListener('pointerdown', function (e) {
-      if (!ctrl.enabled || isTransitioning) return;
-      ctrl.pointers.push(e);
-
-      if (ctrl.pointers.length === 1) {
-        ctrl.isRotating = e.button === 0;
-        ctrl.isPanning = e.button === 2;
-        ctrl.lastPointer.x = e.clientX;
-        ctrl.lastPointer.y = e.clientY;
-      } else if (ctrl.pointers.length === 2) {
-        // 双指：准备缩放
-        ctrl.isRotating = false;
-        ctrl.isPanning = false;
-        const dx = ctrl.pointers[0].clientX - ctrl.pointers[1].clientX;
-        const dy = ctrl.pointers[0].clientY - ctrl.pointers[1].clientY;
-        ctrl.lastDist = Math.sqrt(dx * dx + dy * dy);
-      }
-    });
-
-    // 鼠标移动
-    canvas.addEventListener('pointermove', function (e) {
-      if (!ctrl.enabled || isTransitioning) return;
-
-      // 更新指针位置
-      const idx = ctrl.pointers.findIndex((p) => p.pointerId === e.pointerId);
-      if (idx >= 0) ctrl.pointers[idx] = e;
-
-      if (ctrl.pointers.length === 1 && (ctrl.isRotating || ctrl.isPanning)) {
-        const dx = e.clientX - ctrl.lastPointer.x;
-        const dy = e.clientY - ctrl.lastPointer.y;
-
-        if (ctrl.isRotating) {
-          ctrl.sphericalDelta.theta -= dx * ctrl.rotateSpeed;
-          ctrl.sphericalDelta.phi -= dy * ctrl.rotateSpeed;
-          // 限制 phi 范围，避免翻转
-          ctrl.sphericalDelta.phi = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, ctrl.sphericalDelta.phi));
-        } else if (ctrl.isPanning) {
-          const pan = new THREE.Vector3(-dx * ctrl.panSpeed, dy * ctrl.panSpeed, 0);
-          pan.applyQuaternion(camera.quaternion);
-          ctrl.panOffset.add(pan);
-        }
-
-        ctrl.lastPointer.x = e.clientX;
-        ctrl.lastPointer.y = e.clientY;
-      } else if (ctrl.pointers.length === 2) {
-        // 双指缩放
-        const dx = ctrl.pointers[0].clientX - ctrl.pointers[1].clientX;
-        const dy = ctrl.pointers[0].clientY - ctrl.pointers[1].clientY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const scale = ctrl.lastDist / dist;
-        ctrl.spherical.radius *= scale;
-        ctrl.lastDist = dist;
-      }
-    });
-
-    // 鼠标释放
-    function onPointerUp(e) {
-      const idx = ctrl.pointers.findIndex((p) => p.pointerId === e.pointerId);
-      if (idx >= 0) ctrl.pointers.splice(idx, 1);
-      if (ctrl.pointers.length === 0) {
-        ctrl.isRotating = false;
-        ctrl.isPanning = false;
-      }
-    }
-    canvas.addEventListener('pointerup', onPointerUp);
-    canvas.addEventListener('pointercancel', onPointerUp);
-
-    // 滚轮缩放
-    canvas.addEventListener('wheel', function (e) {
-      if (!ctrl.enabled || isTransitioning) return;
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 1 + ctrl.zoomSpeed : 1 - ctrl.zoomSpeed;
-      ctrl.spherical.radius *= delta;
-      ctrl.spherical.radius = Math.max(ctrl.minDistance, Math.min(ctrl.maxDistance, ctrl.spherical.radius));
-    }, { passive: false });
-
-    // 禁用右键菜单
-    canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-
-    // 每帧更新
-    ctrl.update = function () {
-      // 应用旋转增量
-      ctrl.spherical.theta += ctrl.sphericalDelta.theta;
-      ctrl.spherical.phi += ctrl.sphericalDelta.phi;
-      ctrl.spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, ctrl.spherical.phi));
-      ctrl.sphericalDelta.set(0, 0, 0);
-
-      // 应用平移
-      ctrl.target.add(ctrl.panOffset);
-      ctrl.panOffset.set(0, 0, 0);
-
-      // 限制半径
-      ctrl.spherical.radius = Math.max(ctrl.minDistance, Math.min(ctrl.maxDistance, ctrl.spherical.radius));
-
-      updateCamera();
-    };
-  }
-
-  /* ========================================================
-     3. 五个时代的 3D 场景构建
-     --------------------------------------------------------
-     每个时代返回一个 THREE.Group，包含该时代的所有 3D 对象。
-     使用基本几何体（Box, Cylinder, Sphere, Cone, Torus 等）
-     程序化构建代表性场景。
-  ======================================================== */
-
-  // ---- 辅助材质函数 ----
-  function mat(color, opts) {
-    return new THREE.MeshStandardMaterial(Object.assign({ color: color, roughness: 0.8, metalness: 0.1 }, opts));
-  }
-
-  function emissiveMat(color, intensity) {
-    return new THREE.MeshStandardMaterial({
-      color: color,
-      emissive: color,
-      emissiveIntensity: intensity,
-      roughness: 0.4,
-      metalness: 0.3
-    });
-  }
-
-  // ---- 时代 0: 史前时代 ----
-  function buildPrehistoric() {
-    const group = new THREE.Group();
-
-    // 地面
-    const ground = new THREE.Mesh(
-      new THREE.CylinderGeometry(18, 18, 0.5, 32),
-      mat(0x5a4a3a)
-    );
-    ground.position.y = -0.25;
-    ground.receiveShadow = true;
-    group.add(ground);
-
-    // 洞穴（半球体）
-    const cave = new THREE.Mesh(
-      new THREE.SphereGeometry(4, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-      mat(0x6b5a4a, { side: THREE.DoubleSide })
-    );
-    cave.position.set(-3, 0, -2);
-    cave.rotation.x = Math.PI;
-    cave.castShadow = true;
-    group.add(cave);
-
-    // 洞穴入口光
-    const caveLight = new THREE.PointLight(0xff8844, 2, 15);
-    caveLight.position.set(-3, 1, -1);
-    group.add(caveLight);
-
-    // 篝火
-    const fireBase = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.3, 0.5, 0.3, 8),
-      mat(0x4a3a2a)
-    );
-    fireBase.position.set(2, 0.15, 2);
-    group.add(fireBase);
-
-    // 火焰（发光球体）
-    const flame = new THREE.Mesh(
-      new THREE.SphereGeometry(0.4, 8, 8),
-      emissiveMat(0xff6600, 2)
-    );
-    flame.position.set(2, 0.6, 2);
-    group.add(flame);
-
-    const fireLight = new THREE.PointLight(0xff6600, 3, 12);
-    fireLight.position.set(2, 1, 2);
-    fireLight.castShadow = true;
-    group.add(fireLight);
-
-    // 石头（散布）
-    const stoneColors = [0x7a7a7a, 0x8a8a7a, 0x6a6a6a];
-    for (let i = 0; i < 12; i++) {
-      const s = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(0.2 + Math.random() * 0.3, 0),
-        mat(stoneColors[i % 3])
-      );
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 3 + Math.random() * 8;
-      s.position.set(Math.cos(angle) * dist, 0.15, Math.sin(angle) * dist);
-      s.rotation.set(Math.random(), Math.random(), Math.random());
-      s.castShadow = true;
-      group.add(s);
-    }
-
-    // 树木（简化：圆柱+圆锥）
-    for (let i = 0; i < 6; i++) {
-      const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.15, 0.2, 2, 6),
-        mat(0x4a3a2a)
-      );
-      const leaves = new THREE.Mesh(
-        new THREE.ConeGeometry(1, 2.5, 6),
-        mat(0x2a5a2a)
-      );
-      const angle = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
-      const dist = 8 + Math.random() * 5;
-      const x = Math.cos(angle) * dist;
-      const z = Math.sin(angle) * dist;
-      trunk.position.set(x, 1, z);
-      leaves.position.set(x, 2.5, z);
-      trunk.castShadow = true;
-      leaves.castShadow = true;
-      group.add(trunk);
-      group.add(leaves);
-    }
-
-    // 动画数据
-    group.userData = {
-      flame: flame,
-      fireLight: fireLight,
-      animate: function (time) {
-        // 火焰跳动
-        const scale = 1 + Math.sin(time * 8) * 0.15 + Math.sin(time * 13) * 0.1;
-        flame.scale.set(scale, scale * 1.2, scale);
-        fireLight.intensity = 2.5 + Math.sin(time * 6) * 0.8;
-      }
-    };
-
-    return group;
-  }
-
-  // ---- 时代 1: 古代文明 ----
-  function buildAncient() {
-    const group = new THREE.Group();
-
-    // 沙地
-    const ground = new THREE.Mesh(
-      new THREE.CylinderGeometry(22, 22, 0.5, 32),
-      mat(0xc4a86b)
-    );
-    ground.position.y = -0.25;
-    ground.receiveShadow = true;
-    group.add(ground);
-
-    // 金字塔（四面体）
-    const pyramid = new THREE.Mesh(
-      new THREE.ConeGeometry(5, 6, 4),
-      mat(0xd4b87a)
-    );
-    pyramid.position.set(0, 3, -3);
-    pyramid.rotation.y = Math.PI / 4;
-    pyramid.castShadow = true;
-    group.add(pyramid);
-
-    // 小金字塔
-    const smallPyramid = new THREE.Mesh(
-      new THREE.ConeGeometry(2.5, 3, 4),
-      mat(0xc4a86b)
-    );
-    smallPyramid.position.set(6, 1.5, 2);
-    smallPyramid.rotation.y = Math.PI / 4;
-    smallPyramid.castShadow = true;
-    group.add(smallPyramid);
-
-    // 方尖碑
-    const obelisk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.2, 0.5, 6, 4),
-      mat(0xb8a070)
-    );
-    obelisk.position.set(-5, 3, 4);
-    obelisk.castShadow = true;
-    group.add(obelisk);
-
-    const obelisk2 = obelisk.clone();
-    obelisk2.position.set(-7, 3, 3);
-    group.add(obelisk2);
-
-    // 神殿柱廊
-    for (let i = 0; i < 6; i++) {
-      const col = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.35, 4, 8),
-        mat(0xd0c090)
-      );
-      col.position.set(-4 + i * 1.2, 2, 6);
-      col.castShadow = true;
-      group.add(col);
-
-      // 柱头
-      const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 0.2, 0.8),
-        mat(0xd0c090)
-      );
-      cap.position.set(-4 + i * 1.2, 4.1, 6);
-      group.add(cap);
-    }
-
-    // 神殿横梁
-    const beam = new THREE.Mesh(
-      new THREE.BoxGeometry(7.5, 0.3, 0.8),
-      mat(0xd0c090)
-    );
-    beam.position.set(1, 4.3, 6);
-    group.add(beam);
-
-    // 斯芬克斯（简化：长方体+球体）
-    const sphinxBody = new THREE.Mesh(
-      new THREE.BoxGeometry(2, 1.2, 3),
-      mat(0xc4a86b)
-    );
-    sphinxBody.position.set(5, 0.6, -3);
-    group.add(sphinxBody);
-
-    const sphinxHead = new THREE.Mesh(
-      new THREE.SphereGeometry(0.5, 8, 8),
-      mat(0xc4a86b)
-    );
-    sphinxHead.position.set(5, 1.5, -2.2);
-    group.add(sphinxHead);
-
-    // 动画
-    group.userData = {
-      animate: function (time) {
-        // 轻微浮动效果（神殿神秘感）
-        group.children.forEach(function (child, i) {
-          if (child.geometry && child.geometry.type === 'CylinderGeometry' && child.position.z === 6) {
-            child.position.y = 2 + Math.sin(time * 2 + i) * 0.02;
-          }
-        });
-      }
-    };
-
-    return group;
-  }
-
-  // ---- 时代 2: 中世纪 ----
-  function buildMedieval() {
-    const group = new THREE.Group();
-
-    // 草地
-    const ground = new THREE.Mesh(
-      new THREE.CylinderGeometry(20, 20, 0.5, 32),
-      mat(0x3a6a3a)
-    );
-    ground.position.y = -0.25;
-    ground.receiveShadow = true;
-    group.add(ground);
-
-    // 城堡主楼
-    const keep = new THREE.Mesh(
-      new THREE.BoxGeometry(4, 8, 4),
-      mat(0x7a7a7a)
-    );
-    keep.position.set(0, 4, 0);
-    keep.castShadow = true;
-    group.add(keep);
-
-    // 城堡顶
-    const keepRoof = new THREE.Mesh(
-      new THREE.ConeGeometry(3.5, 3, 4),
-      mat(0x5a4a3a)
-    );
-    keepRoof.position.set(0, 9.5, 0);
-    keepRoof.rotation.y = Math.PI / 4;
-    group.add(keepRoof);
-
-    // 角塔
-    const towerPositions = [[-3, -3], [3, -3], [-3, 3], [3, 3]];
-    towerPositions.forEach(function (pos) {
-      const tower = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.8, 1, 6, 8),
-        mat(0x7a7a7a)
-      );
-      tower.position.set(pos[0], 3, pos[1]);
-      tower.castShadow = true;
-      group.add(tower);
-
-      const roof = new THREE.Mesh(
-        new THREE.ConeGeometry(1.2, 2, 8),
-        mat(0x5a4a3a)
-      );
-      roof.position.set(pos[0], 7, pos[1]);
-      group.add(roof);
-    });
-
-    // 城墙
-    const wallThickness = 0.5;
-    const wallHeight = 4;
-    const wallLength = 8;
-    [[0, -4], [0, 4], [-4, 0], [4, 0]].forEach(function (pos, i) {
-      const wall = new THREE.Mesh(
-        new THREE.BoxGeometry(
-          i < 2 ? wallLength : wallThickness,
-          wallHeight,
-          i < 2 ? wallThickness : wallLength
-        ),
-        mat(0x8a8a8a)
-      );
-      wall.position.set(pos[0], wallHeight / 2, pos[1]);
-      wall.castShadow = true;
-      group.add(wall);
-    });
-
-    // 吊桥
-    const bridge = new THREE.Mesh(
-      new THREE.BoxGeometry(3, 0.2, 4),
-      mat(0x5a4a3a)
-    );
-    bridge.position.set(0, 0.1, 6);
-    group.add(bridge);
-
-    // 护城河（蓝色圆环）
-    const moat = new THREE.Mesh(
-      new THREE.RingGeometry(10, 13, 32),
-      mat(0x2a6a9a, { transparent: true, opacity: 0.7 })
-    );
-    moat.rotation.x = -Math.PI / 2;
-    moat.position.y = 0.05;
-    group.add(moat);
-
-    // 旗帜
-    const flagPole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.05, 3, 4),
-      mat(0x5a4a3a)
-    );
-    flagPole.position.set(0, 10.5, 0);
-    group.add(flagPole);
-
-    const flag = new THREE.Mesh(
-      new THREE.BoxGeometry(1.5, 0.8, 0.05),
-      mat(0xaa3333)
-    );
-    flag.position.set(0.8, 11.5, 0);
-    group.add(flag);
-
-    // 动画
-    group.userData = {
-      flag: flag,
-      animate: function (time) {
-        // 旗帜飘动
-        flag.rotation.y = Math.sin(time * 3) * 0.15;
-        flag.scale.x = 1 + Math.sin(time * 5) * 0.05;
-      }
-    };
-
-    return group;
-  }
-
-  // ---- 时代 3: 工业革命 ----
-  function buildIndustrial() {
-    const group = new THREE.Group();
-
-    // 工厂地面
-    const ground = new THREE.Mesh(
-      new THREE.CylinderGeometry(20, 20, 0.5, 32),
-      mat(0x3a3a3a)
-    );
-    ground.position.y = -0.25;
-    ground.receiveShadow = true;
-    group.add(ground);
-
-    // 工厂建筑
-    const factory = new THREE.Mesh(
-      new THREE.BoxGeometry(8, 6, 5),
-      mat(0x5a5a5a)
-    );
-    factory.position.set(0, 3, 0);
-    factory.castShadow = true;
-    group.add(factory);
-
-    // 烟囱
-    const chimney = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.6, 0.8, 10, 8),
-      mat(0x4a4a4a)
-    );
-    chimney.position.set(3, 5, -1);
-    chimney.castShadow = true;
-    group.add(chimney);
-
-    const chimney2 = chimney.clone();
-    chimney2.position.set(-2, 5, -1);
-    chimney2.scale.set(0.8, 0.9, 0.8);
-    group.add(chimney2);
-
-    // 烟雾粒子（简化：半透明球体）
-    const smokes = [];
-    for (let i = 0; i < 8; i++) {
-      const smoke = new THREE.Mesh(
-        new THREE.SphereGeometry(0.3 + i * 0.15, 6, 6),
-        new THREE.MeshStandardMaterial({
-          color: 0x888888,
-          transparent: true,
-          opacity: 0.4 - i * 0.04,
-          roughness: 1
-        })
-      );
-      smoke.position.set(3, 10 + i * 1.2, -1);
-      group.add(smoke);
-      smokes.push(smoke);
-    }
-
-    // 齿轮（Torus）
-    function createGear(x, y, z, radius, color) {
-      const gear = new THREE.Mesh(
-        new THREE.TorusGeometry(radius, radius * 0.15, 8, 16),
-        mat(color, { metalness: 0.6, roughness: 0.3 })
-      );
-      gear.position.set(x, y, z);
-      gear.castShadow = true;
-      return gear;
-    }
-
-    const gear1 = createGear(-5, 2, 3, 1.2, 0x8a8a6a);
-    const gear2 = createGear(-3.2, 2, 3, 0.8, 0x7a7a5a);
-    const gear3 = createGear(-5, 2, 4.5, 0.6, 0x9a9a7a);
-    group.add(gear1);
-    group.add(gear2);
-    group.add(gear3);
-
-    // 蒸汽机（简化）
-    const engine = new THREE.Mesh(
-      new THREE.BoxGeometry(3, 2, 2),
-      mat(0x6a5a4a, { metalness: 0.5, roughness: 0.4 })
-    );
-    engine.position.set(4, 1, 3);
-    engine.castShadow = true;
-    group.add(engine);
-
-    // 活塞
-    const piston = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.2, 0.2, 2, 8),
-      mat(0x8a8a7a, { metalness: 0.7 })
-    );
-    piston.position.set(4, 2.5, 3);
-    group.add(piston);
-
-    // 铁轨
-    for (let i = 0; i < 5; i++) {
-      const rail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.15, 0.1, 8),
-        mat(0x5a5a4a, { metalness: 0.6 })
-      );
-      rail.position.set(-6 + i * 0.5, 0.05, 0);
-      group.add(rail);
-    }
-
-    // 矿车
-    const cart = new THREE.Mesh(
-      new THREE.BoxGeometry(1.5, 0.8, 1),
-      mat(0x6a4a2a)
-    );
-    cart.position.set(-5, 0.5, 0);
-    group.add(cart);
-
-    // 动画
-    group.userData = {
-      smokes: smokes,
-      gear1: gear1,
-      gear2: gear2,
-      gear3: gear3,
-      piston: piston,
-      animate: function (time) {
-        // 烟雾上升
-        smokes.forEach(function (s, i) {
-          s.position.y = 10 + i * 1.2 + (time * 0.5 + i * 0.3) % 3;
-          s.scale.setScalar(1 + ((time * 0.5 + i * 0.3) % 3) * 0.3);
-        });
-        // 齿轮转动
-        gear1.rotation.z = time * 0.8;
-        gear2.rotation.z = -time * 1.2;
-        gear3.rotation.z = time * 1.5;
-        // 活塞运动
-        piston.position.y = 2.5 + Math.sin(time * 4) * 0.3;
-      }
-    };
-
-    return group;
-  }
-
-  // ---- 时代 4: 现代 ----
-  function buildModern() {
-    const group = new THREE.Group();
-
-    // 城市地面
-    const ground = new THREE.Mesh(
-      new THREE.CylinderGeometry(25, 25, 0.5, 32),
-      mat(0x2a2a2a)
-    );
-    ground.position.y = -0.25;
-    ground.receiveShadow = true;
-    group.add(ground);
-
-    // 网格道路
-    const roadMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
-    for (let i = -2; i <= 2; i++) {
-      const roadX = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 20), roadMat);
-      roadX.position.set(i * 4, 0.02, 0);
-      group.add(roadX);
-
-      const roadZ = new THREE.Mesh(new THREE.BoxGeometry(20, 0.05, 0.8), roadMat);
-      roadZ.position.set(0, 0.02, i * 4);
-      group.add(roadZ);
-    }
-
-    // 摩天大楼
-    const buildingColors = [0x4a6a8a, 0x5a7a9a, 0x3a5a7a, 0x6a8aaa, 0x4a5a6a];
-    const buildings = [];
-
-    for (let x = -2; x <= 2; x++) {
-      for (let z = -2; z <= 2; z++) {
-        if (x === 0 && z === 0) continue; // 中心留空
-        const height = 3 + Math.random() * 10;
-        const width = 1 + Math.random() * 1.5;
-        const building = new THREE.Mesh(
-          new THREE.BoxGeometry(width, height, width),
-          mat(buildingColors[Math.floor(Math.random() * buildingColors.length)])
-        );
-        building.position.set(x * 4, height / 2, z * 4);
-        building.castShadow = true;
-        group.add(building);
-        buildings.push({ mesh: building, height: height });
-
-        // 窗户发光
-        const windowRows = Math.floor(height / 1.5);
-        for (let r = 1; r < windowRows; r++) {
-          if (Math.random() > 0.6) {
-            const win = new THREE.Mesh(
-              new THREE.BoxGeometry(width * 0.6, 0.3, width + 0.05),
-              emissiveMat(0xffdd88, 0.5 + Math.random() * 1)
-            );
-            win.position.set(x * 4, r * 1.5, z * 4);
-            group.add(win);
-          }
-        }
-      }
-    }
-
-    // 中心高塔
-    const tower = new THREE.Mesh(
-      new THREE.BoxGeometry(2, 18, 2),
-      mat(0x3a5a8a, { metalness: 0.4, roughness: 0.2 })
-    );
-    tower.position.set(0, 9, 0);
-    tower.castShadow = true;
-    group.add(tower);
-
-    // 塔顶天线
-    const antenna = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.1, 4, 4),
-      mat(0xaaaaaa, { metalness: 0.8 })
-    );
-    antenna.position.set(0, 20, 0);
-    group.add(antenna);
-
-    // 塔顶发光
-    const towerLight = new THREE.Mesh(
-      new THREE.SphereGeometry(0.3, 8, 8),
-      emissiveMat(0xff3333, 3)
-    );
-    towerLight.position.set(0, 22, 0);
-    group.add(towerLight);
-
-    // 数据流（发光线条）
-    const dataLines = [];
-    for (let i = 0; i < 12; i++) {
-      const line = new THREE.Mesh(
-        new THREE.BoxGeometry(0.05, 0.05, 3 + Math.random() * 5),
-        emissiveMat(0x00aaff, 1.5)
-      );
-      const angle = (i / 12) * Math.PI * 2;
-      const dist = 8 + Math.random() * 8;
-      line.position.set(Math.cos(angle) * dist, 1 + Math.random() * 3, Math.sin(angle) * dist);
-      line.rotation.y = angle + Math.PI / 2;
-      group.add(line);
-      dataLines.push(line);
-    }
-
-    // 动画
-    group.userData = {
-      towerLight: towerLight,
-      dataLines: dataLines,
-      animate: function (time) {
-        // 塔顶闪烁
-        towerLight.material.emissiveIntensity = 2 + Math.sin(time * 4) * 1.5;
-        // 数据流流动
-        dataLines.forEach(function (line, i) {
-          line.material.emissiveIntensity = 0.5 + Math.sin(time * 3 + i) * 0.8;
-          line.position.y = 1 + Math.sin(time * 2 + i * 0.5) * 0.5;
-        });
-      }
-    };
-
-    return group;
-  }
-
-  /* ========================================================
-     构建所有时代场景
-  ======================================================== */
-  function buildAllEras() {
-    const builders = [buildPrehistoric, buildAncient, buildMedieval, buildIndustrial, buildModern];
-
-    builders.forEach(function (builder, index) {
-      const group = builder();
-      // 将每个时代沿 X 轴分散放置，便于相机飞行过渡
-      group.position.x = index * 60;
-      scene.add(group);
-      eraGroups.push(group);
-    });
-  }
-
-  /* ========================================================
-     4. 环境光效系统
-  ======================================================== */
-  let ambientLight, mainLight, fillLight;
-
-  function initLighting() {
-    // 环境光
-    ambientLight = new THREE.AmbientLight(ERAS[0].lightColor, ERAS[0].ambientIntensity);
-    scene.add(ambientLight);
-
-    // 主光源（方向光，产生阴影）
-    mainLight = new THREE.DirectionalLight(ERAS[0].lightColor, 1.2);
-    mainLight.position.set(10, 20, 10);
-    mainLight.castShadow = true;
-    mainLight.shadow.mapSize.width = 2048;
-    mainLight.shadow.mapSize.height = 2048;
-    mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 100;
-    mainLight.shadow.camera.left = -20;
-    mainLight.shadow.camera.right = 20;
-    mainLight.shadow.camera.top = 20;
-    mainLight.shadow.camera.bottom = -20;
-    scene.add(mainLight);
-
-    // 补光
-    fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
-    fillLight.position.set(-10, 10, -10);
-    scene.add(fillLight);
-  }
-
-  /* ========================================================
-     5. 相机动画与场景过渡
-     --------------------------------------------------------
-     使用平滑插值实现相机位置、目标点、背景色的过渡。
-  ======================================================== */
-  let transitionStartTime = 0;
-  let transitionDuration = 2000; // 毫秒
-  let fromCameraPos = new THREE.Vector3();
-  let toCameraPos = new THREE.Vector3();
-  let fromCameraTarget = new THREE.Vector3();
-  let toCameraTarget = new THREE.Vector3();
-  let fromBgColor = new THREE.Color();
-  let toBgColor = new THREE.Color();
-  let fromFogColor = new THREE.Color();
-  let toFogColor = new THREE.Color();
-
-  function switchToEra(eraIndex) {
-    if (isTransitioning || eraIndex === currentEra || eraIndex < 0 || eraIndex >= ERAS.length) return;
-
-    isTransitioning = true;
-    const fromEra = ERAS[currentEra];
-    const toEra = ERAS[eraIndex];
-    currentEra = eraIndex;
-    transitionStartTime = performance.now();
-
-    // 记录起始状态
-    fromCameraPos.copy(camera.position);
-    toCameraPos.copy(toEra.cameraPos);
-    toCameraPos.x += eraIndex * 60; // 偏移到对应时代位置
-    fromCameraTarget.copy(orbitControls.target);
-    toCameraTarget.copy(toEra.cameraTarget);
-    toCameraTarget.x += eraIndex * 60;
-
-    fromBgColor.copy(scene.background);
-    toBgColor.setHex(toEra.bgColor);
-    fromFogColor.copy(scene.fog.color);
-    toFogColor.setHex(toEra.fogColor);
-
-    // 更新 UI
-    updateEraUI(eraIndex);
-    updateTimelineUI(eraIndex);
-
-    // 更新光照
-    mainLight.color.setHex(toEra.lightColor);
-    ambientLight.color.setHex(toEra.lightColor);
-
-    // 过渡结束后重新初始化轨道控制器的球坐标
-    setTimeout(function () {
-      orbitControls.target.copy(toCameraTarget);
-      const offset = new THREE.Vector3().subVectors(toCameraPos, toCameraTarget);
-      orbitControls.spherical.setFromVector3(offset);
-      isTransitioning = false;
-    }, transitionDuration);
-  }
-
-  function updateTransition(now) {
-    if (!isTransitioning) return;
-
-    const elapsed = now - transitionStartTime;
-    const t = Math.min(elapsed / transitionDuration, 1);
-    const eased = easeInOutCubic(t);
-
-    // 插值相机位置
-    camera.position.lerpVectors(fromCameraPos, toCameraPos, eased);
-
-    // 插值目标点
-    orbitControls.target.lerpVectors(fromCameraTarget, toCameraTarget, eased);
-    camera.lookAt(orbitControls.target);
-
-    // 插值背景色
-    scene.background.lerpColors(fromBgColor, toBgColor, eased);
-    scene.fog.color.lerpColors(fromFogColor, toFogColor, eased);
-
-    // 插值环境光强度
-    ambientLight.intensity = lerp(ERAS[currentEra - (t < 1 ? 1 : 0)].ambientIntensity, ERAS[currentEra].ambientIntensity, eased);
-  }
-
-  /* ========================================================
-     6. 时间轴 UI 交互
-  ======================================================== */
-  function updateEraUI(index) {
-    const info = $('#eraInfo');
-    const era = ERAS[index];
-
-    // 淡出
-    info.classList.add('transitioning');
-
-    setTimeout(function () {
-      $('#eraBadge').textContent = String(index + 1).padStart(2, '0');
-      $('#eraTitle').textContent = era.title;
-      $('#eraDesc').textContent = era.desc;
-      $('#eraYear').textContent = era.year;
-
-      // 淡入
-      info.classList.remove('transitioning');
-    }, 300);
-  }
-
-  function updateTimelineUI(index) {
-    const nodes = $$('.timeline-node');
-    const progress = $('#timelineProgress');
-
-    nodes.forEach(function (node, i) {
-      node.classList.toggle('active', i === index);
-    });
-
-    // 进度条宽度：0%, 25%, 50%, 75%, 100%
-    progress.style.width = (index / (ERAS.length - 1) * 100) + '%';
-  }
-
-  function initTimelineControls() {
-    const nodes = $$('.timeline-node');
-    nodes.forEach(function (node) {
-      node.addEventListener('click', function () {
-        const eraIndex = parseInt(node.dataset.era, 10);
-        switchToEra(eraIndex);
-      });
-    });
-  }
-
-  /* ========================================================
-     7. 滚动 / 拖拽 / 滑动导航
-     --------------------------------------------------------
-     - 桌面：鼠标滚轮切换时代
-     - 移动端：左右滑动手势切换时代
-     - 同时支持键盘方向键
-  ======================================================== */
-  function initNavigation() {
-    let scrollAccumulated = 0;
-    const scrollThreshold = 80;
-    let scrollTimeout = null;
-
-    // 滚轮导航
-    window.addEventListener('wheel', function (e) {
-      if (isTransitioning) return;
-      scrollAccumulated += e.deltaY;
-
-      if (Math.abs(scrollAccumulated) > scrollThreshold) {
-        if (scrollAccumulated > 0) {
-          switchToEra(Math.min(currentEra + 1, ERAS.length - 1));
-        } else {
-          switchToEra(Math.max(currentEra - 1, 0));
-        }
-        scrollAccumulated = 0;
-      }
-
-      clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(function () {
-        scrollAccumulated = 0;
-      }, 300);
-    }, { passive: true });
-
-    // 触摸滑动导航
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchStartTime = 0;
-
-    window.addEventListener('touchstart', function (e) {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-      touchStartTime = Date.now();
-    }, { passive: true });
-
-    window.addEventListener('touchend', function (e) {
-      if (isTransitioning) return;
-      const touchEndX = e.changedTouches[0].clientX;
-      const touchEndY = e.changedTouches[0].clientY;
-      const dx = touchEndX - touchStartX;
-      const dy = touchEndY - touchStartY;
-      const dt = Date.now() - touchStartTime;
-
-      // 水平滑动，且滑动距离足够，且时间较短（快速滑动）
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60 && dt < 500) {
-        if (dx < 0) {
-          switchToEra(Math.min(currentEra + 1, ERAS.length - 1));
-        } else {
-          switchToEra(Math.max(currentEra - 1, 0));
-        }
-
-        // 显示滑动提示
-        showSwipeHint(dx < 0 ? '👈' : '👉');
-      }
-    }, { passive: true });
-
-    // 键盘导航
-    window.addEventListener('keydown', function (e) {
-      if (isTransitioning) return;
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        switchToEra(Math.min(currentEra + 1, ERAS.length - 1));
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        switchToEra(Math.max(currentEra - 1, 0));
-      }
-    });
-  }
-
-  // 滑动提示
-  function showSwipeHint(icon) {
-    const hint = $('#swipeHint');
-    hint.innerHTML = '<span>' + icon + '</span>';
-    hint.classList.add('show');
-    setTimeout(function () {
-      hint.classList.remove('show');
-    }, 600);
-  }
-
-  /* ========================================================
-     8. 动画循环
-  ======================================================== */
-  function animate() {
-    requestAnimationFrame(animate);
-
-    const time = performance.now() * 0.001;
-
-    // 更新过渡动画
-    updateTransition(performance.now());
-
-    // 更新轨道控制器
-    if (!isTransitioning) {
-      orbitControls.update();
-    }
-
-    // 更新当前时代的动画
-    const currentGroup = eraGroups[currentEra];
-    if (currentGroup && currentGroup.userData.animate) {
-      currentGroup.userData.animate(time);
-    }
-
-    // 渲染
-    renderer.render(scene, camera);
-  }
-
-  /* ========================================================
-     9. 窗口 resize 处理
-  ======================================================== */
-  function initResizeHandler() {
-    window.addEventListener('resize', function () {
-      const container = $('#canvas-container');
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(width, height);
-    });
-  }
-
-  /* ========================================================
-     10. 加载完成后隐藏加载层
-  ======================================================== */
-  function hideLoading() {
-    setTimeout(function () {
-      const loading = $('#loading');
-      if (loading) loading.classList.add('hidden');
-
-      // 3 秒后淡出操作提示
-      setTimeout(function () {
-        const hint = $('#controlsHint');
-        if (hint) hint.classList.add('fade-out');
-      }, 3000);
-    }, 800);
-  }
-
-  /* ========================================================
-     入口：初始化所有模块
-  ======================================================== */
+  if (!window.THREE) { fallback('Local Three.js library unavailable'); return; }
+  try { init(); } catch (e) { fallback(e); }
   function init() {
-    initScene();
-    initLighting();
-    buildAllEras();
-    initOrbitControls();
-    initTimelineControls();
-    initNavigation();
-    initResizeHandler();
-
-    // 初始化 UI
-    updateEraUI(0);
-    updateTimelineUI(0);
-
-    // 启动动画循环
-    animate();
-
-    // 隐藏加载层
-    hideLoading();
-  }
-
-  // DOM 就绪后初始化
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+    const T = THREE;
+    const mobile = matchMedia('(max-width:700px)').matches;
+    const reduced = matchMedia('(prefers-reduced-motion:reduce)').matches;
+    let seed = 145093;
+    const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    const range = (a,b) => a + (b-a)*rnd();
+    const V = (x,y,z) => new T.Vector3(x,y,z);
+    const renderer = new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.35 : 1.6));
+    renderer.outputColorSpace = T.SRGBColorSpace;
+    renderer.toneMapping = T.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.13;
+    renderer.info.autoReset = false;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = T.PCFSoftShadowMap;
+    host.appendChild(renderer.domElement);
+    renderer.domElement.setAttribute('aria-label','仅限消耗三维模型，拖拽旋转，滚轮缩放，也可用方向键旋转与加减键缩放');
+    renderer.domElement.tabIndex = 0;
+    const scene = new T.Scene();
+    scene.background = new T.Color('#77726d');
+    scene.fog = new T.Fog('#77726d', 17, 32);
+    const camera = new T.PerspectiveCamera(38, 1, .08, 55);
+    scene.add(new T.HemisphereLight('#f9eee4','#504b43',.55));
+    const key = new T.DirectionalLight('#fff4e8',2.65);
+    key.position.set(-3.6,7.2,3.3);
+    key.castShadow = true;
+    key.shadow.mapSize.set(mobile ? 1024 : 2048,mobile ? 1024 : 2048);
+    Object.assign(key.shadow.camera,{left:-5.5,right:5.5,top:5,bottom:-5,near:.5,far:20});
+    key.shadow.bias = -.0005;
+    key.shadow.normalBias = .017;
+    key.shadow.radius = 2;
+    scene.add(key);
+    const fill = new T.DirectionalLight('#dfebff',.38); fill.position.set(4,3,-1);scene.add(fill);
+    const rim = new T.DirectionalLight('#fff4e1',.8); rim.position.set(-2,3,-5);scene.add(rim);
+    // Procedural studio for physically meaningful metal reflections (no downloaded HDR).
+    const env = new T.Scene();env.background = new T.Color('#555047');
+    const room = new T.Mesh(new T.BoxGeometry(16,10,16),new T.MeshBasicMaterial({color:'#686159',side:T.BackSide})); env.add(room);
+    function softbox(x,y,z,w,h,rx,ry,color) {
+      const box = new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({color:new T.Color(color).multiplyScalar(3.2),side:T.DoubleSide}));
+      box.position.set(x,y,z);box.rotation.set(rx,ry,0);env.add(box);
+    }
+    softbox(-4,4,1,5,3,-.4,Math.PI/2,'#ffffff');
+    softbox(4,2,-1,2,5,0,-Math.PI/2,'#bdb8b4');
+    softbox(0,4,-4,5,2,0,0,'#faf3e6');
+    softbox(0,4.6,0,7,4,Math.PI/2,0,'#f1e4ce');
+    const pmrem = new T.PMREMGenerator(renderer);
+    const envRT = pmrem.fromScene(env,.08);scene.environment=envRT.texture;
+    env.traverse(n => { if(n.isMesh){n.geometry.dispose();n.material.dispose();} });pmrem.dispose();
+    renderer.shadowMap.autoUpdate=false;
+    renderer.shadowMap.needsUpdate=true;
+    function canvasTexture(n,paint,color=true) {
+      const c=document.createElement('canvas');c.width=c.height=n;paint(c.getContext('2d'),n);
+      const tex=new T.CanvasTexture(c);tex.colorSpace=color?T.SRGBColorSpace:T.NoColorSpace;
+      tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return tex;
+    }
+    const metalMap=canvasTexture(256,(c,n)=>{
+      c.fillStyle='#b2a18e';c.fillRect(0,0,n,n);
+      for(let i=0;i<2200;i++){const k=Math.floor(range(70,200));c.strokeStyle=`rgba(${k},${k-8},${k-15},0.16)`;c.beginPath();const y=range(0,n);c.moveTo(0,y);c.lineTo(n,y+range(-1,1));c.stroke();}
+      for(let i=0;i<70;i++){c.fillStyle='rgba(47,37,21,.07)';c.beginPath();c.ellipse(range(0,n),range(0,n),range(2,8),range(1,3),0,0,Math.PI*2);c.fill();}
+    });
+    metalMap.wrapS=metalMap.wrapT=T.RepeatWrapping;
+    const waxBump=canvasTexture(128,(c,n)=>{
+      c.fillStyle='#888';c.fillRect(0,0,n,n);
+      for(let i=0;i<1200;i++){c.fillStyle=`rgba(${Math.floor(range(20,230))},${Math.floor(range(20,230))},100,0.16)`;c.beginPath();c.arc(range(0,n),range(0,n),range(.3,2),0,7);c.fill();}
+    },false);
+    const brass=new T.MeshStandardMaterial({color:'#d5a578',metalness:.93,roughness:.26,map:metalMap,envMapIntensity:1.5});
+    const darkBrass=new T.MeshStandardMaterial({color:'#704118',metalness:.91,roughness:.3,map:metalMap});
+    const gold=new T.MeshStandardMaterial({color:'#af9341',metalness:.61,roughness:.39,bumpMap:waxBump,bumpScale:.009});
+    const paleGold=new T.MeshStandardMaterial({color:'#ab9e6d',metalness:.45,roughness:.47,bumpMap:waxBump,bumpScale:.012});
+    const silver=new T.MeshStandardMaterial({color:'#bdb5a2',metalness:.94,roughness:.22});
+    const pearl=new T.MeshPhysicalMaterial({color:'#b9956b',metalness:.25,roughness:.28,clearcoat:.48,clearcoatRoughness:.25});
+    const amber=new T.MeshPhysicalMaterial({color:'#cb720d',metalness:.08,roughness:.2,clearcoat:1,clearcoatRoughness:.12,bumpMap:waxBump,bumpScale:.006});
+    const deepAmber=new T.MeshPhysicalMaterial({color:'#9a4e0b',metalness:.12,roughness:.23,clearcoat:1,clearcoatRoughness:.14});
+    const cableMat=new T.MeshStandardMaterial({color:'#6f6049',roughness:.7});
+    const blackMat=new T.MeshStandardMaterial({color:'#221c15',metalness:.25,roughness:.38});
+    // Merge by material + anatomical label. Thousands of beads/links become tens of draws.
+    const batches=new Map();
+    const m4=new T.Matrix4(),q=new T.Quaternion(),one=V(1,1,1);
+    function part(geo,mat,pos=V(0,0,0),scale=one,rot=new T.Euler(),label='铜金灯架 / 拉丝金属') {
+      const key=mat.uuid+'|'+label;
+      if(!batches.has(key))batches.set(key,{mat,label,geos:[]});
+      let g=geo.index?geo.toNonIndexed():geo.clone();
+      q.setFromEuler(rot);m4.compose(pos,q,scale);g.applyMatrix4(m4);
+      batches.get(key).geos.push(g);
+    }
+    const sphere=new T.SphereGeometry(1,10,7);
+    const cylinder=new T.CylinderGeometry(1,1,1,12);
+    const chainGeo=new T.TorusGeometry(.023,.004,4,9);
+    function ball(pos,r,mat=pearl,label='珠串 / 柔和高光') {part(sphere,mat,pos,V(r,r,r),new T.Euler(),label);}
+    function rod(a,b,r,mat=brass,label='铜金灯架 / 拉丝金属') {
+      const d=b.clone().sub(a);const qq=new T.Quaternion().setFromUnitVectors(V(0,1,0),d.clone().normalize());
+      part(cylinder,mat,a.clone().add(b).multiplyScalar(.5),V(r,d.length(),r),new T.Euler().setFromQuaternion(qq),label);
+    }
+    function tube(points,r,mat,label='细链与线缆') {
+      const curve=new T.CatmullRomCurve3(points);const geo=new T.TubeGeometry(curve,Math.max(18,points.length*3),r,5,false);
+      part(geo,mat,V(0,0,0),one,new T.Euler(),label);geo.dispose();
+    }
+    const tilt = p => {const z=-.075;const x=.035;return p.clone().applyEuler(new T.Euler(x,0,z));};
+    function band(rx,rz,y) {
+      const n=112;const arr=[];const uv=[];
+      for(let i=0;i<n;i++){
+        const t=i/n*Math.PI*2, t2=(i+1)/n*Math.PI*2;
+        const corners=[[-.012,-.026], [.012,-.026],[.012,.026],[-.012,.026]];
+        for(let face=0;face<4;face++){
+          const j=(face+1)%4;const list=[[t,face],[t2,j],[t2,face],[t,face],[t,j],[t2,j]];
+          list.forEach(([a,k],idx)=>{const c=corners[k];const p=tilt(V((rx+c[0])*Math.cos(a),y+c[1],(rz+c[0])*Math.sin(a)));arr.push(p.x,p.y,p.z);uv.push(a/(2*Math.PI)*5,(idx===2||idx===4||idx===5)?1:0);});
+        }
+      }
+      const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(arr,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.computeVertexNormals();part(g,brass);g.dispose();
+    }
+    const rings=[{rx:2.35,rz:1.75,y:.95,count:37},{rx:1.83,rz:1.32,y:1.34,count:28},{rx:1.14,rz:.74,y:1.77,count:17}];
+    rings.forEach(r=>band(r.rx,r.rz,r.y));
+    // Peripheral ribs and center riser. Deliberately sparse to keep the photograph's open frame.
+    for(let i=0;i<4;i++){
+      const a=i*Math.PI/2+.28;
+      rings.slice(0,-1).forEach((r,j)=>{const r2=rings[j+1];rod(tilt(V(r.rx*Math.cos(a),r.y,r.rz*Math.sin(a))),tilt(V(r2.rx*Math.cos(a),r2.y,r2.rz*Math.sin(a))),.014,darkBrass);});
+    }
+    rod(tilt(V(-.38,1.68,0)),tilt(V(.38,1.68,0)),.027);
+    const bulbPoints=[[.03,0],[.14,.035],[.25,.13],[.37,.3],[.39,.42],[.30,.56],[.19,.72],[.15,.79]].map(p=>new T.Vector2(p[0],p[1]));
+    const bulbGeo=new T.LatheGeometry(bulbPoints,40);
+    part(bulbGeo,new T.MeshStandardMaterial({color:'#dcc3a5',metalness:1,roughness:.19,envMapIntensity:1.65}),V(0,.17,0),one,new T.Euler(),'中心灯泡 / 镜面反射，默认不发光');bulbGeo.dispose();
+    part(cylinder,blackMat,V(0,.98,0),V(.18,.15,.18),new T.Euler(),'中心灯泡 / 灯座');
+    part(cylinder,darkBrass,V(0,1.16,0),V(.17,.26,.17),new T.Euler(),'中心灯泡 / 螺纹灯座');
+    for(let i=0;i<11;i++){const tor=new T.TorusGeometry(.178,.008,5,25);part(tor,brass,V(0,1.04+i*.022,0),one,new T.Euler(Math.PI/2,0,0),'中心灯泡 / 螺纹灯座');tor.dispose();}
+    part(cylinder,brass,V(0,1.40,0),V(.22,.19,.22),new T.Euler(),'中心灯泡 / 铜金灯座');
+    rod(V(0,1.5,0),V(0,1.94,0),.029);
+    // Wax earrings have open holes, thick uneven rim and drooping elongated silhouettes.
+    function waxLoop(pos,w,h,mat,angle=0,label='蜡制镂空耳饰 / 不规则软化边缘') {
+      const pts=[],n=24;for(let i=0;i<=n;i++){const a=i/n*2*Math.PI;const k=1+range(-.12,.12);pts.push(V(w*Math.cos(a)*k,h*Math.sin(a)*k,range(-.012,.012)));}
+      const curve=new T.CatmullRomCurve3(pts,true);const geo=new T.TubeGeometry(curve,42,.027,6,true);
+      part(geo,mat,pos,one,new T.Euler(.1,angle,range(-.16,.16)),label);geo.dispose();
+    }
+    function plaque(pos,size,mat=gold,label='蜡制金色饰片 / 凹凸与磨损') {
+      const g=new T.IcosahedronGeometry(1,1);const a=g.attributes.position;
+      for(let i=0;i<a.count;i++){const k=range(.83,1.16);a.setXYZ(i,a.getX(i)*k,a.getY(i)*k,a.getZ(i)*k);}g.computeVertexNormals();
+      part(g,mat,pos,V(size,size*range(1,1.45),size*.26),new T.Euler(range(-.3,.3),range(-.7,.7),range(-.5,.5)),label);g.dispose();
+    }
+    function chain(start,end) {
+      const len=start.distanceTo(end);const n=Math.floor(len/.037);const d=end.clone().sub(start);
+      for(let j=0;j<=n;j++){const p=start.clone().addScaledVector(d,j/n);part(chainGeo,silver,p,V(.63,.85,.63),new T.Euler(0,j%2?Math.PI/2:0,0),'细链 / 金属链环');}
+    }
+    rings.forEach((r,ri)=>{
+      for(let i=0;i<r.count;i++){
+        const a=i/r.count*Math.PI*2+range(-.035,.035);
+        const top=tilt(V(r.rx*Math.cos(a),r.y-.032,r.rz*Math.sin(a)));
+        const len=range(.1,ri===0?.39:.48);
+        const end=top.clone().add(V(range(-.015,.015),-len,range(-.01,.01)));
+        chain(top,end);
+        const type=i%5;
+        if(type===0 || (ri===0 && i%7===0)){
+          const h=range(.13,.25);waxLoop(end.clone().add(V(0,-h,0)),range(.07,.105),h,i%2?paleGold:gold,a+.6);
+        }else if(type===1){plaque(end.clone().add(V(0,-.08,0)),range(.048,.09),i%2?gold:amber);}
+        else if(type===2){
+          const n=7+Math.floor(rnd()*6);for(let j=0;j<n;j++){const p=end.clone().add(V(Math.sin(j*.45)*.026,-j*.04,0));ball(p,range(.025,.038));}
+          plaque(end.clone().add(V(0,-n*.04,0)),.05,gold);
+        }else if(type===3){
+          // Slack pearl strand draped between neighboring points rather than solid rods.
+          const span=range(.20,.40);const pts=[];for(let j=0;j<12;j++){const s=j/11;const p=end.clone().add(V(s*span,-Math.sin(s*Math.PI)*.19,Math.sin(a)*s*.07));ball(p,.026,pearl);pts.push(p);}tube(pts,.0035,cableMat,'珠串细线');
+        }else{ball(end,.054,gold,'蜡制珠饰 / 金色软化形态');plaque(end.clone().add(V(0,-.08,0)),.04,paleGold);}
+        if(i%8===0){
+          const drop=end.clone().add(V(0,-.22,0));tube([end,end.clone().add(V(.005,-.15,0)),drop],.008,amber,'滴落蜡痕 / 琥珀色蜡');ball(drop,.027,amber,'滴落蜡痕 / 琥珀色蜡');
+        }
+      }
+    });
+    // Left detached canopy and arc of braided hanging chain.
+    part(cylinder,brass,V(-3.15,.17,.55),V(.37,.09,.37),new T.Euler(.13,0,-.12),'左侧连接件 / 铜金吊灯顶盖');
+    part(cylinder,blackMat,V(-3.15,.215,.55),V(.30,.025,.30),new T.Euler(.13,0,-.12),'左侧连接件 / 铜金吊灯顶盖');
+    const cablePts=[V(-4.1,.03,.86),V(-3.74,.025,.90),V(-3.3,.15,.57),V(-2.58,.40,.36),V(-1.86,.84,.18),V(-1.02,1.6,.10),V(-.43,2.02,.05),V(-.05,2.09,0),V(.03,1.87,0)];
+    tube(cablePts,.026,cableMat,'线缆 / 弯曲绝缘线');
+    const ccurve=new T.CatmullRomCurve3(cablePts.slice(2));
+    for(let i=0;i<31;i++){const p=ccurve.getPoint(i/30).add(V(0,.07,0));const g=new T.TorusGeometry(.064,.009,5,12);part(g,brass,p,V(1.45,.7,1),new T.Euler(.2,0,-.65),'左侧链条 / 铜金环链');g.dispose();}
+    // Ground debris, distributed strongly toward front-right as in the reference.
+    for(let i=0;i<116;i++){
+      let x,z;
+      if(i<75){x=range(.6,3.4);z=range(.1,2.35);}else{x=range(-2.5,2.8);z=range(-1.5,2.2);}
+      const g=new T.IcosahedronGeometry(1,i%3===0?1:0),a=g.attributes.position;
+      for(let j=0;j<a.count;j++){const k=range(.65,1.3);a.setXYZ(j,a.getX(j)*k,a.getY(j)*k,a.getZ(j)*k);}g.computeVertexNormals();
+      part(g,i%6===0?gold:i%3===0?deepAmber:amber,V(x,.038,z),V(range(.035,.13),range(.018,.055),range(.035,.14)),new T.Euler(range(-.3,.3),range(0,6.28),0),'散落蜡片 / 琥珀色与金色残留');g.dispose();
+    }
+    for(let i=0;i<8;i++){
+      const x=range(.25,3),z=range(.2,2.4);waxLoop(V(x,.048,z),range(.09,.16),range(.1,.17),i%2?gold:paleGold,range(0,6.28),'落地耳饰 / 蜡质镂空环');
+      // Same geometry laid flat using a horizontal transform in its own batch.
+      const b=batches.get((i%2?gold:paleGold).uuid+'|落地耳饰 / 蜡质镂空环');const g=b.geos[b.geos.length-1];
+      g.translate(-x,-.048,-z);g.rotateX(Math.PI/2);g.translate(x,.055,z);
+    }
+    [[-1.9,.7],[2.2,1.8],[1.15,1.25],[2.85,1.12]].forEach(([x,z],i)=>{
+      const pts=[];for(let j=0;j<28;j++){const a=j*.22;const p=V(x+Math.cos(a)*(.19+j*.01),.04,z+Math.sin(a)*.16);ball(p,range(.027,.04),pearl);pts.push(p);}tube(pts,.004,cableMat,'地面珠串 / 细线');
+    });
+    for(let i=0;i<10;i++){const x=range(-2.6,3.2),z=range(-1,2.2);tube([V(x,.018,z),V(x+.12,.02,z+.15),V(x+.4,.018,z+.21),V(x+.55,.015,z+.14)],.0028,silver,'地面细链 / 散落金属线');}
+    const pickables=[];
+    batches.forEach(({mat,label,geos})=>{
+      const pos=[],normal=[],uv=[];
+      geos.forEach(g=>{pos.push(g.attributes.position.array);normal.push(g.attributes.normal.array);uv.push(g.attributes.uv?g.attributes.uv.array:new Float32Array(g.attributes.position.count*2));});
+      const join=arrays=>{const result=new Float32Array(arrays.reduce((n,a)=>n+a.length,0));let off=0;arrays.forEach(a=>{result.set(a,off);off+=a.length;});return result;};
+      const geo=new T.BufferGeometry();geo.setAttribute('position',new T.BufferAttribute(join(pos),3));geo.setAttribute('normal',new T.BufferAttribute(join(normal),3));geo.setAttribute('uv',new T.BufferAttribute(join(uv),2));geo.computeBoundingSphere();
+      const mesh=new T.Mesh(geo,mat);mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.label=label;scene.add(mesh);pickables.push(mesh);geos.forEach(g=>g.dispose());
+    });
+    sphere.dispose();cylinder.dispose();chainGeo.dispose();batches.clear();
+    // Fine cotton weave is generated at real UV scale; macro stains are a separate alpha decal.
+    const weave=canvasTexture(512,(c,n)=>{
+      c.fillStyle='#d5d0c8';c.fillRect(0,0,n,n);
+      for(let i=0;i<n;i+=3){c.fillStyle=i%6===0?'rgba(255,255,255,.3)':'rgba(80,75,69,.10)';c.fillRect(i,0,1,n);c.fillRect(0,i,n,1);}
+      for(let i=0;i<8000;i++){const v=rnd()>.5?'rgba(255,255,255,.12)':'rgba(80,70,60,.06)';c.fillStyle=v;c.fillRect(range(0,n),range(0,n),1,1);}
+    });weave.wrapS=weave.wrapT=T.RepeatWrapping;weave.repeat.set(115,115);
+    const floorGeo=new T.PlaneGeometry(80,80,64,64);floorGeo.rotateX(-Math.PI/2);
+    const fp=floorGeo.attributes.position;for(let i=0;i<fp.count;i++){const x=fp.getX(i),z=fp.getZ(i);fp.setY(i,-.027+Math.sin(x*1.3+z*.6)*.005+Math.sin(z*2.8)*.003);}floorGeo.computeVertexNormals();
+    const floor=new T.Mesh(floorGeo,new T.MeshStandardMaterial({color:'#f4f2ee',roughness:.98,envMapIntensity:.18,map:weave,bumpMap:weave,bumpScale:.018}));floor.receiveShadow=true;scene.add(floor);
+    const backdropMap=canvasTexture(256,(c,n)=>{const g=c.createLinearGradient(0,0,0,n);g.addColorStop(0,'#11100f');g.addColorStop(.6,'#24211f');g.addColorStop(1,'#aaa49c');c.fillStyle=g;c.fillRect(0,0,n,n);});
+    const backdrop=new T.Mesh(new T.PlaneGeometry(40,9),new T.MeshBasicMaterial({map:backdropMap}));backdrop.position.set(0,4.4,-7);scene.add(backdrop);
+    const contactMap=canvasTexture(256,(c,n)=>{const g=c.createRadialGradient(n/2,n/2,5,n/2,n/2,n/2);g.addColorStop(0,'rgba(39,31,22,.15)');g.addColorStop(.5,'rgba(39,31,22,.09)');g.addColorStop(1,'rgba(39,31,22,0)');c.fillStyle=g;c.fillRect(0,0,n,n);});
+    const contact=new T.Mesh(new T.PlaneGeometry(6.7,4.5),new T.MeshBasicMaterial({map:contactMap,transparent:true,depthWrite:false}));contact.rotation.x=-Math.PI/2;contact.position.y=-.012;scene.add(contact);
+    const stains=canvasTexture(1024,(c,n)=>{
+      c.clearRect(0,0,n,n);
+      for(let i=0;i<260;i++){
+        const x=range(n*.48,n*.88),y=range(n*.31,n*.77),r=range(2,19);
+        const grad=c.createRadialGradient(x,y,0,x,y,r);grad.addColorStop(0,`rgba(133,71,13,${range(.03,.17)})`);grad.addColorStop(1,'rgba(180,108,25,0)');c.fillStyle=grad;c.fillRect(x-r,y-r,r*2,r*2);
+      }
+      for(let i=0;i<30;i++){c.strokeStyle='rgba(158,91,26,.14)';c.lineWidth=range(.5,2);c.beginPath();c.moveTo(range(500,850),range(350,750));c.bezierCurveTo(range(530,830),range(320,790),range(530,830),range(320,790),range(530,830),range(320,790));c.stroke();}
+    });
+    const decal=new T.Mesh(new T.PlaneGeometry(9,7),new T.MeshBasicMaterial({map:stains,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}));decal.rotation.x=-Math.PI/2;decal.position.y=-.008;scene.add(decal);
+    // One lightweight post pass: slight warmth, restrained film grain and vignette. No invented glow.
+    const rt=new T.WebGLRenderTarget(1,1,{depthBuffer:true,type:T.HalfFloatType,samples:renderer.capabilities.isWebGL2?2:0});rt.texture.colorSpace=T.NoColorSpace;
+    const postScene=new T.Scene(),postCamera=new T.OrthographicCamera(-1,1,1,-1,0,1);
+    const postMat=new T.ShaderMaterial({depthTest:false,depthWrite:false,uniforms:{image:{value:rt.texture},film:{value:1}},vertexShader:'varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}',fragmentShader:`uniform sampler2D image;uniform float film;varying vec2 vUv;
+      float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+      void main(){vec3 col=texture2D(image,vUv).rgb;
+      float d=length((vUv-0.5)*vec2(1.02,0.93));float vig=1.0-0.20*smoothstep(0.22,0.72,d);
+      float grain=(hash(gl_FragCoord.xy)-0.5)*0.016;
+      col=mix(col,max(col*vec3(1.018,1.004,0.977)*vig+grain,vec3(0.0)),film);gl_FragColor=vec4(col,1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      }`});
+    postScene.add(new T.Mesh(new T.PlaneGeometry(2,2),postMat));
+    const zoomMax=mobile?18:14;
+    $('zoomRange').max=String(zoomMax);
+    const defaultView={theta:.31,phi:1.13,radius:10.2,target:V(.10,.67,.05)};
+    const state={theta:defaultView.theta,phi:defaultView.phi,radius:defaultView.radius,target:defaultView.target.clone()};
+    const desired={...state,target:state.target.clone()};
+    if(mobile){state.radius=desired.radius=16.5;defaultView.radius=16.5;}
+    let auto=false,scheduled=0,dirty=true,last=0,frames=0,fpsStart=performance.now(),fps=0;
+    function invalidate(){dirty=true;if(!scheduled&&!document.hidden)scheduled=requestAnimationFrame(frame);}
+    function cameraUpdate(){camera.position.set(state.target.x+state.radius*Math.sin(state.phi)*Math.sin(state.theta),state.target.y+state.radius*Math.cos(state.phi),state.target.z+state.radius*Math.sin(state.phi)*Math.cos(state.theta));camera.lookAt(state.target);}
+    function draw(){renderer.info.reset();cameraUpdate();renderer.setRenderTarget(rt);renderer.render(scene,camera);renderer.setRenderTarget(null);renderer.render(postScene,postCamera);}
+    function frame(now){
+      scheduled=0;if(document.hidden)return;
+      const dt=Math.min(.05,(now-last)/1000||.016);last=now;
+      if(auto)desired.theta+=dt*.13;
+      const k=reduced?1:1-Math.exp(-dt*12);
+      let moving=false;
+      ['theta','phi','radius'].forEach(p=>{const diff=desired[p]-state[p];if(Math.abs(diff)>.00015){state[p]+=diff*k;moving=true;}else state[p]=desired[p];});
+      if(state.target.distanceTo(desired.target)>.0001){state.target.lerp(desired.target,k);moving=true;}else state.target.copy(desired.target);
+      draw();dirty=false;frames++;
+      if(now-fpsStart>900){fps=Math.round(frames*1000/(now-fpsStart));fpsStart=now;frames=0;}
+      if(auto||moving)scheduled=requestAnimationFrame(frame);
+    }
+    function resize(){const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();const sz=renderer.getDrawingBufferSize(new T.Vector2());rt.setSize(sz.x,sz.y);invalidate();}
+    new ResizeObserver(resize).observe(host);resize();
+    const canvas=renderer.domElement,pointers=new Map();let pointerTravel=0,lastPinch=0;
+    function stopAuto(){auto=false;$('autoRotate').setAttribute('aria-pressed','false');}
+    function syncZoom(){ $('zoomRange').value=desired.radius; $('zoomValue').textContent=desired.radius<7?'特写':desired.radius>11?'远景':'全景';}
+    canvas.addEventListener('pointerdown',e=>{stopAuto();canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});pointerTravel=0;lastPinch=0;});
+    canvas.addEventListener('pointermove',e=>{
+      if(!pointers.has(e.pointerId))return;
+      const prev=pointers.get(e.pointerId),dx=e.clientX-prev.x,dy=e.clientY-prev.y;pointerTravel+=Math.abs(dx)+Math.abs(dy);
+      pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(pointers.size===1){desired.theta-=dx*.007;desired.phi=T.MathUtils.clamp(desired.phi-dy*.005,.17,1.48);}
+      else{const p=[...pointers.values()];const dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(lastPinch>0)desired.radius=T.MathUtils.clamp(desired.radius*lastPinch/dist,5,zoomMax);lastPinch=dist;syncZoom();}
+      invalidate();
+    });
+    const raycaster=new T.Raycaster();
+    canvas.addEventListener('pointerup',e=>{
+      if(pointerTravel<7 && pointers.size===1){const r=canvas.getBoundingClientRect();raycaster.setFromCamera(new T.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);const hits=raycaster.intersectObjects(pickables);if(hits.length)$('sceneStatus').textContent=hits[0].object.userData.label;}
+      pointers.delete(e.pointerId);lastPinch=0;
+    });
+    canvas.addEventListener('pointercancel',e=>pointers.delete(e.pointerId));
+    canvas.addEventListener('wheel',e=>{e.preventDefault();stopAuto();desired.radius=T.MathUtils.clamp(desired.radius*Math.exp(T.MathUtils.clamp(e.deltaY,-200,200)*.001),5,zoomMax);syncZoom();invalidate();},{passive:false});
+    canvas.addEventListener('keydown',e=>{
+      let used=true;switch(e.key){case 'ArrowLeft':desired.theta-=.12;break;case 'ArrowRight':desired.theta+=.12;break;case 'ArrowUp':desired.phi=Math.max(.17,desired.phi-.1);break;case 'ArrowDown':desired.phi=Math.min(1.48,desired.phi+.1);break;case '+':case '=':desired.radius=Math.max(5,desired.radius-.5);break;case '-':desired.radius=Math.min(zoomMax,desired.radius+.5);break;default:used=false;}
+      if(used){e.preventDefault();stopAuto();syncZoom();invalidate();}
+    });
+    function view(which){stopAuto();document.querySelectorAll('.button-grid button').forEach(b=>b.classList.remove('selected'));$(which).classList.add('selected');
+      if(which==='resetView'){Object.assign(desired,{theta:defaultView.theta,phi:defaultView.phi,radius:defaultView.radius});desired.target.copy(defaultView.target);}
+      if(which==='topView'){Object.assign(desired,{theta:.18,phi:.24,radius:mobile?15.5:8.7});desired.target.set(0,.3,0);}
+      if(which==='detailView'){Object.assign(desired,{theta:.12,phi:1.30,radius:5.5});desired.target.set(-.4,.66,1.05);}
+      syncZoom();invalidate();
+    }
+    ['resetView','topView','detailView'].forEach(id=>$(id).onclick=()=>view(id));
+    $('autoRotate').onclick=()=>{auto=!auto;$('autoRotate').setAttribute('aria-pressed',String(auto));fpsStart=performance.now();frames=0;invalidate();};
+    $('zoomRange').oninput=e=>{stopAuto();desired.radius=Number(e.target.value);syncZoom();invalidate();};
+    $('filterToggle').onclick=()=>{const enabled=$('filterToggle').getAttribute('aria-pressed')!=='true';$('filterToggle').setAttribute('aria-pressed',String(enabled));postMat.uniforms.film.value=enabled?1:0;invalidate();};
+    function quality(high){renderer.shadowMap.needsUpdate=true;key.shadow.mapSize.set(high&&!mobile?2048:1024,high&&!mobile?2048:1024);if(key.shadow.map){key.shadow.map.dispose();key.shadow.map=null;}renderer.setPixelRatio(high?Math.min(devicePixelRatio,mobile?1.35:1.6):1);$('qualityStatus').textContent=high?'WebGL · 高清阴影':'WebGL · 轻量模式';resize();}
+    $('qualityToggle').onclick=()=>{const high=$('qualityToggle').getAttribute('aria-pressed')!=='true';$('qualityToggle').setAttribute('aria-pressed',String(high));quality(high);};
+    document.addEventListener('visibilitychange',()=>{if(document.hidden){if(scheduled)cancelAnimationFrame(scheduled);scheduled=0;}else{last=performance.now();invalidate();}});
+    canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();$('sceneStatus').textContent='图形上下文已暂停，等待恢复';if(scheduled)cancelAnimationFrame(scheduled);scheduled=0;});
+    canvas.addEventListener('webglcontextrestored',()=>{renderer.shadowMap.needsUpdate=true;last=performance.now();$('sceneStatus').textContent='三维显示已恢复 · 拖拽旋转';invalidate();});
+    window.consumptionScene={
+      getStats:()=>({three:T.REVISION,meshes:pickables.length,triangles:pickables.reduce((n,m)=>n+m.geometry.attributes.position.count/3,0),drawCalls:renderer.info.render.calls,fps,autoRotate:auto,viewport:[host.clientWidth,host.clientHeight],pixelRatio:renderer.getPixelRatio(),camera:camera.position.toArray(),filter:postMat.uniforms.film.value}),
+      setView:view,
+      render:()=>{invalidate();},
+      // Deterministic benchmark of complete scene + post pass (CPU submission, not claimed GPU FPS).
+      benchmark:(n=40)=>{const start=performance.now();for(let i=0;i<n;i++)draw();return{frames:n,submissionMs:(performance.now()-start)/n};}
+    };
+    loading.hidden=true;syncZoom();invalidate();
   }
 })();
